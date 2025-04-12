@@ -2,20 +2,13 @@
 
 namespace App\Http\Controllers;
 
-use App\Helpers\Constant;
+use App\Helpers\ResponseHandler;
 use App\Http\Resources\UserCollection;
-use App\Models\Otp;
 use App\Models\User;
-use App\Notifications\SendEmailVerificationNotification;
-use App\Notifications\SendResetPasswordNotification;
-use Carbon\Carbon;
-use Error;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
-use Tymon\JWTAuth\Facades\JWTAuth;
 
 class UserController extends Controller
 {
@@ -35,7 +28,7 @@ class UserController extends Controller
     // Return the result as JSON
     $data = $customers->latest()->paginate($itemPerPage);
 
-    return response()->json(new UserCollection($data));
+    return ResponseHandler::success(data: new UserCollection($data));
   }
 
   public function store(Request $request)
@@ -50,7 +43,7 @@ class UserController extends Controller
     ]);
 
     if ($validated->fails()) {
-      return response()->json(['message' => 'Invalid information', 'errors' => $validated->errors()], 403);
+      return ResponseHandler::validationErrors(errors: $validated->errors());
     }
 
     $body = [
@@ -65,7 +58,7 @@ class UserController extends Controller
 
     $user->assignRole('customer');
 
-    return response()->json([ "message" => "Customer created successfully", "user" => $user ]);
+    return ResponseHandler::success(data: ['user' => $user]);
   }
 
   public function update(Request $request, $id)
@@ -80,7 +73,7 @@ class UserController extends Controller
     ]);
 
     if ($validated->fails()) {
-      return response()->json(['message' => 'Invalid information', 'errors' => $validated->errors()], 403);
+      return ResponseHandler::validationErrors(errors: $validated->errors());
     }
 
     $user = User::with('roles')->findOrFail($id);
@@ -91,7 +84,7 @@ class UserController extends Controller
       $user->update(["password" => Hash::make($request->password) ?? Hash::make('password')]);
     }
 
-    return response()->json(["message" => "Customer info updated successfully", "user" => $user ]);
+    return ResponseHandler::success(data: ['user' => $user]);
   }
 
   public function updateRole(Request $request, $id)
@@ -102,14 +95,14 @@ class UserController extends Controller
     ]);
 
     if ($validated->fails()) {
-      return response()->json(['message' => 'Invalid information', 'errors' => $validated->errors()], 403);
+      return ResponseHandler::validationErrors(errors: $validated->errors());
     }
 
     $user = User::with('roles')->findOrFail($id);
 
     $user->syncRoles(...$request->roles);
 
-    return response()->json(["message" => "Customer roles updated successfully", "user" => $user ]);
+    return ResponseHandler::success(data: ['user' => $user]);
   }
 
   public function updateStatus(Request $request, $id)
@@ -119,16 +112,13 @@ class UserController extends Controller
     ]);
 
     if ($validated->fails()) {
-      return response()->json(['message' => 'Invalid information', 'errors' => $validated->errors()], 403);
+      return ResponseHandler::validationErrors(errors: $validated->errors());
     }
 
     $user = User::with('roles')->findOrFail($id);
 
     $user->update(["status" => $request->status]);
 
-    return response()->json([
-      "message" => "Customer status updated successfully",
-      "user" => $user,
-    ]);
+    return ResponseHandler::success(data: ['user' => $user]);
   }
 }
