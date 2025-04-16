@@ -13,8 +13,13 @@ use GuzzleHttp\Psr7\Response;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
+use Tymon\JWTAuth\Exceptions\JWTException;
+use Tymon\JWTAuth\Exceptions\TokenExpiredException;
+use Tymon\JWTAuth\Exceptions\TokenInvalidException;
+use Tymon\JWTAuth\Facades\JWTAuth;
 
 class AuthController extends Controller
 {
@@ -102,18 +107,47 @@ class AuthController extends Controller
 
   public function logout(Request $request)
   {
-    Auth::logout();
-    return ResponseHandler::success(message: 'Successfully logged out');
+    try {
+      // Invalidate the token server-side if using JWT
+      auth()->logout(); // This invalidates the current token if configured
+      return ResponseHandler::success(message: 'Successfully logged out');
+    } catch (JWTException $e) {
+      // Handle cases where logout might fail (e.g., token already invalid)
+      Log::error("Logout failed: " . $e->getMessage(), ['exception' => $e]);
+      return ResponseHandler::error(message: 'Logout failed.', status: 500);
+    }
   }
 
-  public function refreshTokens()
+  public function refreshTokens(Request $request)
   {
-    $token = Auth::refresh();
-
-    return ResponseHandler::success(message: 'Operation Successful', data: [
-      'accessToken' => $token,
-      'refreshToken' => $token,
+    // 1. Validate the request body
+    $validated = Validator::make($request->all(), [
+      'refreshToken' => 'required|string',
     ]);
+
+    if ($validated->fails()) {
+      return ResponseHandler::validationErrors(errors: $validated->errors());
+    }
+
+    $refreshToken = $request->input('refreshToken');
+
+    try {
+      $newAccessToken = JWTAuth::setToken($refreshToken)->refresh();
+
+      return ResponseHandler::success(message: 'Token refreshed successfully', data: [
+        'accessToken' => $newAccessToken,
+      ]);
+    } catch (TokenExpiredException $e) {
+      return ResponseHandler::error(message: 'Refresh token expired', status: 401);
+    } catch (TokenInvalidException $e) {
+      return ResponseHandler::error(message: 'Refresh token invalid', status: 401);
+    } catch (JWTException $e) {
+      Log::error("Token refresh failed: " . $e->getMessage(), ['exception' => $e]);
+      return ResponseHandler::error(message: 'Could not refresh token', status: 500);
+    } catch (\Throwable $th) {
+      Log::error("Token refresh failed (general): " . $th->getMessage(), ['exception' => $th]);
+      return ResponseHandler::error(message: 'An unexpected error occurred', status: 500);
+    }
   }
 
   public function forgotPassword(Request $request)
@@ -139,7 +173,7 @@ class AuthController extends Controller
       $user->save();
 
       $user->notify(new SendResetPasswordNotification($otp));
-      
+
       return ResponseHandler::success(message: 'OTP sent to your email.');
     } catch (\Throwable $th) {
       return ResponseHandler::error(message: $th->getMessage(), status: 403);
@@ -199,7 +233,7 @@ class AuthController extends Controller
       $user->save();
 
       $user->notify(new SendEmailVerificationNotification($otp));
-      
+
       return ResponseHandler::success(message: 'OTP sent to your email.');
     } catch (\Throwable $th) {
       return ResponseHandler::error(message: $th->getMessage(), status: 403);
