@@ -6,32 +6,32 @@ use Closure;
 
 class CorsMiddleware
 {
-  /**
-   * Handle an incoming request.
-   *
-   * @param  \Illuminate\Http\Request  $request
-   * @param  \Closure  $next
-   * @return mixed
-   */
-  public function handle($request, Closure $next)
-  {
-    $headers = [
-      'Access-Control-Allow-Origin'      => '*',
-      'Access-Control-Allow-Methods'     => 'POST, GET, OPTIONS, PUT, DELETE',
-      'Access-Control-Allow-Credentials' => 'true',
-      'Access-Control-Max-Age'           => '86400',
-      'Access-Control-Allow-Headers'     => 'Content-Type, Authorization, X-Requested-With'
-    ];
+    /**
+     * Handle an incoming request and add CORS headers.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @param  Closure  $next
+     * @return mixed
+     */
+    public function handle($request, Closure $next)
+    {
+        $headers = [
+            'Access-Control-Allow-Origin'      => '*', // Use specific origin(s) in production
+            'Access-Control-Allow-Methods'     => 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
+            'Access-Control-Allow-Headers'     => 'Origin, Content-Type, Authorization, X-Requested-With, Accept',
+            'Access-Control-Allow-Credentials' => 'true',
+        ];
 
-    if ($request->isMethod('OPTIONS')) {
-      return response()->json('{"method":"OPTIONS"}', 200, $headers);
+        if ($request->getMethod() === 'OPTIONS') {
+            return response()->json(['status' => 'CORS preflight OK'], 204, $headers);
+        }
+
+        $response = $next($request);
+
+        foreach ($headers as $key => $value) {
+            $response->headers->set($key, $value);
+        }
+
+        return $response;
     }
-
-    $response = $next($request);
-    foreach ($headers as $key => $value) {
-      $response->header($key, $value);
-    }
-
-    return $response;
-  }
 }
